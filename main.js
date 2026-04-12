@@ -12,8 +12,8 @@ const DiscordRPC = require('discord-rpc');
 const { settings } = require('cluster');
 const { setTimeout } = require('timers');
 const { release } = require('os');
-
 const DISCORD_CLIENT_ID = '1477971683708108854';
+const chromeUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
 
 const store = new Store({
   defaults: {
@@ -27,6 +27,8 @@ const autoLauncher = new AutoLaunch({
   name: 'SoundCloud Electron',
   isHidden: true
 });
+
+app.commandLine.appendSwitch('disable-blink-features', 'AutomationControlled');
 
 let tray = null;
 let win = null;
@@ -143,6 +145,7 @@ function createWindow() {
   win.setBrowserView(view);
   view.setBounds({ x: 0, y: 40, width: 1200, height: 757 });
   view.webContents.loadURL('https://soundcloud.com');
+  view.webContents.setUserAgent(chromeUA);
 
   win.on('close', (event) => {
     if (!app.isQuitting) {
@@ -195,38 +198,26 @@ function createWindow() {
   });
 
   view.webContents.on('did-finish-load', () => {
-    view.webContents.insertCSS('::-webkit-scrollbar { display: none; }');
+    view.webContents.insertCSS(`
+    ::-webkit-scrollbar { 
+      display: none !important; 
+    }
 
-    view.webContents.executeJavaScript(`
-      const removeElements = () => {
-        const selectors = [
-          '.header__upsellWrapper.left',
-          '.l-product-banners.l-inner-fullwidth',
-          'div.trackMonetizationSidebarUpsell.sc-background-light.sc-pt-5x.sc-pb-2x.sc-px-2x.sc-mb-3x.sc-mx-1x',
-          'div.quotaMeterWrapper',
-          'article.sidebarModule.g-all-transitions-200-linear.mobileApps'
-        ];
-
-        selectors.forEach((sel) => {
-          document.querySelectorAll(sel).forEach((el) => el.remove());
-        });
-
-        document.querySelectorAll('div.sidebarModule').forEach((el) => {
-          el.style.display = 'none';
-        });
-      };
-
-      removeElements();
-
-      const observer = new MutationObserver(() => {
-        removeElements();
-      });
-
-      observer.observe(document.body, {
-        childList: true,
-        subtree: true
-      });
-    `);
+    .header__upsellWrapper.left,
+    .l-product-banners.l-inner-fullwidth,
+    div.trackMonetizationSidebarUpsell,
+    div.quotaMeterWrapper,
+    article.sidebarModule.mobileApps,
+    div.sidebarModule {
+      display: none !important;
+      visibility: hidden !important;
+      pointer-events: none !important;
+      opacity: 0 !important;
+      height: 0 !important;
+      margin: 0 !important;
+      padding: 0 !important;
+    }
+  `);
 
     injectVolumeBoostHook();
     startTrackMonitoring();
@@ -450,7 +441,7 @@ function startTrackMonitoring() {
         // silently ignore renderer errors during navigation
       }
     }
-  }, 2000);
+  }, 5000);
 }
 
 function getGeniusWindowHtml(trackData) {
