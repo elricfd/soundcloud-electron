@@ -13,8 +13,8 @@ const { settings } = require('cluster');
 const { setTimeout } = require('timers');
 const { release } = require('os');
 const DISCORD_CLIENT_ID = '1477971683708108854';
-const chromeUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36';
-
+const chromeUA = `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/${process.versions.chrome} Safari/537.36`;
+app.userAgentFallback = chromeUA;
 const store = new Store({
   defaults: {
     miniMode: false,
@@ -126,11 +126,13 @@ function createWindow() {
   Menu.setApplicationMenu(null);
   win.loadFile('index.html');
 
-  view = new BrowserView({
-    webPreferences: {
-      contextIsolation: true
-    }
-  });
+	view = new BrowserView({
+	  webPreferences: {
+		contextIsolation: false,
+		nodeIntegration: false,
+		preload: path.join(__dirname, 'view-preload.js')
+	  }
+	});
 
   const TOP_BAR_HEIGHT = 40;
   function resizeView() {
@@ -144,9 +146,22 @@ function createWindow() {
 
   win.setBrowserView(view);
   view.setBounds({ x: 0, y: 40, width: 1200, height: 757 });
-  view.webContents.loadURL('https://soundcloud.com');
-  view.webContents.setUserAgent(chromeUA);
 
+  // --- UA set b4 loadURL so the very first request goes out
+	view.webContents.setUserAgent(chromeUA);
+	view.webContents.session.setUserAgent(chromeUA);
+
+	// spoof Sec-CH-UA client to match real chrome
+	const chromeMajor = process.versions.chrome.split('.')[0];
+	view.webContents.session.webRequest.onBeforeSendHeaders((details, callback) => {
+	  details.requestHeaders['sec-ch-ua'] = `"Chromium";v="${chromeMajor}", "Google Chrome";v="${chromeMajor}", "Not.A/Brand";v="99"`;
+	  details.requestHeaders['sec-ch-ua-mobile'] = '?0';
+	  details.requestHeaders['sec-ch-ua-platform'] = '"Windows"';
+	  callback({ requestHeaders: details.requestHeaders });
+	});
+
+	view.webContents.loadURL('https://soundcloud.com/');
+	
   win.on('close', (event) => {
     if (!app.isQuitting) {
       event.preventDefault();
@@ -922,8 +937,7 @@ ipcMain.handle('genius:search', async (_event, payload) => {
     const response = await axios.get(url, {
       timeout: 12000,
       headers: {
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36'
+        'User-Agent': chromeUA
       }
     });
 
